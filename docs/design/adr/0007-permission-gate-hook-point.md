@@ -18,22 +18,70 @@
 
 结论：**扩展的 handler 链不能当安全边界。**
 
+## 调研补充（2026-09-14，证据汇总）
+
+### 新增第三个选项：**直接替换内置工具**
+
+`openclaw`（用同一份 pi SDK 做产品的成熟项目）的做法（`docs/pi.md:272-283`）：
+
+```typescript
+export function splitSdkTools(options) {
+  return {
+    builtInTools: [],                    // Empty. We override everything
+    customTools: toToolDefinitions(options.tools),
+  };
+}
+```
+
+它的工具流水线（`docs/pi.md:241-249`）：pi 基础工具 → **用自有实现替换**（bash 换成受控实现）→ 自有工具 → **策略过滤** → schema 归一 → abort 包装。
+
+**这条路的好处：TOCTOU 问题（参数被改、改后不重校验）从根上消失**——因为工具是我们自己的，参数进到工具里就是最终值。
+
+**成本比想象的低**：pi 导出了工具工厂 `createReadTool` / `createBashTool` / `createEditTool` / `createWriteTool` / `createCodingTools` / `createReadOnlyTools`，官方 `sandbox` 示例正是用 `createBashTool(cwd, { operations })` 覆盖 bash 的——**我们是"包装"，不是"重写"**。
+
+### 与"自研 vs 复用"的耦合（重要）
+
+**生态里所有第三方权限包都挂在扩展层的 `tool_call` 上**（因为它们都是扩展，没得选）。
+⇒ **选了方案 C（替换工具），就等于放弃了直接复用这些包**——它们的闸根本没机会运行。
+⇒ 反过来说：**如果决定复用 `@gotgenes/pi-permission-system`，那本 ADR 就要选方案 A。**
+**这两条决策必须一起拍。**
+
+### 一条实证：审批请求去重/排队**不是**过度设计
+
+pi issue #7007 原文记录了死锁路径：*"a background subagent's forwarded permission dialog gets clobbered by the main agent's own permission dialog, and the subagent then blocks on its permission wait **with no answerable prompt on screen until it times out**."*
+
+⇒ **pi 不做任何 UI 序列化**，主/子共用 UI 上下文时弹窗会互相覆盖。**这正面支撑本 ADR 决策 2（审批请求消息化 + 排队）。**
+
+### 一条实现时序要求
+
+早先的调研（`@gotgenes/pi-subagents` 源码）确认：子会话的扩展运行在**独立的事件总线**上，只有靠 process-global 注册表才能让子会话被识别。它的做法是把 `session-created` **同步发在 `bindExtensions()` 之前**。
+⇒ **我们的 SessionFactory 必须照此顺序：先注册进 `ApprovalService`，再 `bindExtensions()`。**（与 [ADR-0006](./0006-subagent-process-model.md) 共用同一条约束。）
+
+### "区分闸坏了 vs 用户拒了"——有现成答案了
+
+`@gotgenes/pi-permission-system` 的原文：转发失败**不伪装成用户拒绝**——*"None of them is reported as a user denial, because **no user was ever asked**"*。它还用一个 **2 秒 grace window** 做快速失败，而不是等满超时。
+
+⇒ 我们照此实现：审批链路的失败分三类，文案各不相同 —— **用户拒绝** / **没人被问到（链路问题）** / **闸自身异常**。
+
 ## 决策（提议）
 
-**两层串联**：
+**三层结构**：
 
-1. **硬判定挂在 `Agent.beforeToolCall`**（我们自己的代码，包在最外层）——它先跑，看到的是模型给出的**原始参数**，不受任何 handler 篡改影响。判定完再调用 `AgentSession` 已经装好的那个钩子，把扩展派发继续下去。
-2. **审批请求消息化**：闸不直接 `await ctx.ui.confirm()`，而是向一个 `ApprovalService` 发请求、等回执。请求体带 `actor` 字段标明是谁在请求。
-3. **子代理与主 agent 用同一个闸实例**（依赖 [ADR-0006](./0006-subagent-process-model.md)）。
+1. **硬判定在最内层**：由我们自己的工具实现或工具包装承担（具体选 A/B/C 三方案之一，见下）
+2. **审批请求消息化**：闸不直接 `await ctx.ui.confirm()`，而是向一个 `ApprovalService` 发请求、等回执。请求体带 `actor` 字段标明是谁在请求；`ApprovalService` 负责**排队仲裁**（因为 pi 不做 UI 序列化）
+3. **子代理与主 agent 用同一个闸实例**（依赖 [ADR-0006](./0006-subagent-process-model.md)），且子会话注册必须**先于** `bindExtensions()`
 
 ## 备选方案
 
 | 方案 | 优点 | 缺点 | 为什么没选 |
 |---|---|---|---|
-| **SDK 钩子（硬判定）+ 扩展（UI/审计）串联**（提议） | 判定看原始参数、不可被篡改；UI 仍走官方扩展通道；两者都不浪费 | 需要理解"包装已有钩子"的用法，代码上要小心别把 `AgentSession` 装的钩子弄丢 | — |
-| 只用扩展 `tool_call` | 完全照官方文档写，最省事 | **handler 链可变、改后不重校验 → 不是安全边界**；顺序依赖加载顺序 | 安全边界不该建在这里 |
-| 只用 SDK 钩子，不用扩展系统 | 最可控 | 要自己实现对话框、状态显示、审计入口，等于重写半个扩展系统 | 重复造轮子 |
-| 等官方"最终准入钩子"落地 | 官方背书 | **该钩子尚不存在**，是两张 open issue | 不能对着空气编码 |
+| **A. 扩展层 `tool_call`** | 生态标准；可直接复用第三方闸（如 `@gotgenes/pi-permission-system`） | **`event.input` 可变、改后不重校验 → 不是安全边界**；顺序依赖加载顺序 | 与其他方案二选一 |
+| **B. SDK 钩子 `Agent.beforeToolCall`** | 看原始参数、不可被 handler 篡改；UI 仍走官方扩展通道 | 要包装 `AgentSession` 已装的钩子（对内部实现的依赖）；与第三方闸不兼容 | 与其他方案二选一 |
+| **C. 替换内置工具**（`builtInTools: []` + `customTools`） | **TOCTOU 从根上消失**；有 OpenClaw 的成熟先例；用工具工厂"包装"而非重写 | 要自己组装全部工具；同样与第三方闸不兼容 | 与其他方案二选一 |
+| D. 只用扩展、不碰 SDK 钩子 | 最省事 | 同 A 的缺点 | — |
+| E. 等官方"最终准入钩子" | 官方背书 | **该钩子尚不存在**（两张 open issue，且均被 bot 关闭、无维护者表态） | 不能对着空气编码 |
+
+**待拍板。** 建议：**若决定自研闸 → 选 B 或 C（C 更彻底）；若决定复用 `@gotgenes/pi-permission-system` → 只能选 A。**
 
 ## 后果
 

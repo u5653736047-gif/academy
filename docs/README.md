@@ -44,9 +44,10 @@ docs/
 | — | [00-glossary.md](./00-glossary.md) | 草稿 | 术语表。**先读这个**，避免"实例/会话/子代理"混用 |
 | 01 | [01-requirements.md](./01-requirements.md) | 已评审（待老师） | 需求文档 v1.0.1，替代 v0.1/v0.2 |
 | 02 | [02-scope-v1.md](./02-scope-v1.md) | 草稿 | 第一版范围与不做清单，变更控制基线 |
-| — | [research/](./research/README.md) | 进行中 | pi 权限方案调研（5 个渠道） |
-| — | [design/architecture.md](./design/architecture.md) | 草稿（**待修订**） | 架构概要。subagent 进程模型一节待 ADR-0006 拍板后重写 |
-| — | [design/adr/](./design/adr/README.md) | 进行中 | 架构决策记录。0006 / 0007 待拍板 |
+| — | [research/](./research/README.md) | **已完成** | pi 权限方案调研（5 个渠道）。合并结论见 [permission-gate-survey.md](./research/permission-gate-survey.md) |
+| — | [design/decisions-pending.md](./design/decisions-pending.md) | **待拍板** | ⭐ **一页纸决策清单：4 条待定事项，每条含选项 / 推荐 / 代价。从这里开始** |
+| — | [design/architecture.md](./design/architecture.md) | 草稿（**待修订**） | 架构概要。subagent 进程模型一节待决策后重写 |
+| — | [design/adr/](./design/adr/README.md) | 进行中 | 架构决策记录。0006 / 0007 **提议中** |
 | — | [design/permission-gate.md](./design/permission-gate.md) | 草稿 | 权限闸详细设计。已有大量源码级结论，规则格式待定 |
 | — | [design/gui.md](./design/gui.md) | 骨架 | GUI 四视图。**技术栈未定** |
 | — | [design/ipc-contract.md](./design/ipc-contract.md) | 骨架 | 事件下行 / 指令上行 / 审批请求协议 |

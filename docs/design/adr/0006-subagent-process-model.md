@@ -32,52 +32,212 @@
 
 结论：**照抄官方 subagent 示例 = 要么子代理废掉，要么闸被绕过。**
 
+## 佐证：OpenClaw 的选择（强证据，2026-09-14 补）
+
+`openclaw`（npm 上 255 个版本、latest 已到 2026.9.4 的成熟产品）**用同一份 pi SDK 做产品**，它的子代理是**进程内**的：
+
+| 结论 | 证据 |
+|---|---|
+| 进程内，不是 spawn | `docs/tools/subagents.md:273-286`：*"Sub-agents still share the same gateway process resources"*、*"a dedicated **in-process queue lane**"*；运行注册表是内存 Map |
+| 它**同时**实现了子进程方案（ACP），但**把进程内定为默认** | `docs/tools/acp-agents.md:13,57`；`sessions_spawn` 默认 `runtime: "subagent"` |
+| 主/子**共用同一个工具装配工厂**，靠 `sessionKey` 参数区分 | `createOpenClawCodingTools(options)`；subagent 策略是策略管线的**最后一步** |
+| **"只能收紧、不能放宽"由结构保证** | `isToolAllowedByPolicies = policies.every(p => isToolAllowedByPolicyName(name, p))` |
+| 子代理的"询问"不会绕过闸 | 主/子共用同一份 `createExecTool`；`askFallback` 默认 **deny** |
+
+**这消除了本 ADR 最大的不确定性**：进程内方案在一个真实产品里跑通了，而且它的工具策略管线（单一工厂 + 层层收窄的 `{allow, deny}` 数组）正是"共用同一道闸 + 额外收紧"的最干净实现。
+
+### 需要修正本 ADR 草案的两处
+
+1. **子代理上下文不该用 `SessionManager.inMemory()`。** OpenClaw 的选择相反：子代理转录**落盘**（可被 `sessions_history` 回读、`/subagents log` 查看），靠 `archiveAfterMinutes`（默认 60 分钟）自动归档。
+   **理由值得借鉴**：GUI 上"子代理动作可见"要求转录**可回读**，纯内存会丢掉已完成子代理的细节。
+   → 按此修正：**落盘到独立目录 + 不进主会话列表 + 保留归档策略。**
+2. **进程内不解决"卡死"。** OpenClaw 的中止同样是**协作式**的（`abortEmbeddedPiRun` + AbortSignal 包裹），它没有给出更优解，只靠 `runTimeoutSeconds` + 并发上限兜。
+   → 本 ADR「需要后续跟进」第 2 条（卡死兜底）**仍然没有现成答案**。
+
+### 可借鉴的并发模型（比"设一个并发上限"完整）
+
+| 旋钮 | OpenClaw 默认 | 维度 |
+|---|---|---|
+| `maxConcurrent`（lane `subagent`） | 8 | 全局 |
+| `maxChildrenPerAgent` | 5 | 单个父会话 |
+| `maxSpawnDepth` | 1（推荐 2） | 嵌套深度 |
+
+外加**级联中止**（`cascadeKillChildren` 递归 + 清队列），以及**"完成即 announce、禁止轮询"**——任务消息里硬写 *"do not busy-poll for status"*，且 `Status` 取**运行时结局**而非模型自述，避免子代理谎报成功。
+
+### 一个我们可能要自己做的部分
+
+OpenClaw 全库检索 `过程树 / process tree / spawn tree / run tree` **零命中**：它的界面只到"聊天里流式显示工具调用 + 工具输出卡片"。
+⇒ **"子代理过程树"没有现成实现可抄**，这是我们自己要设计的部分（也可能成为产品的差异点）。
+
+### 一个不能假设它已解决的点
+
+子代理触发的审批在界面上如何**标注归属**（是哪个子代理发的请求），以及能否**按子代理单独中止一条待审批** —— OpenClaw 文档未涉及（`docs/tools/exec-approvals.md` 只列了 agent id，没有 session / 子代理维度）。这块我们要自己做。
+
+## 佐证二：pi 官方的能力边界（2026-09-14 补，源码级）
+
+### 官方**没有**内建子代理，这是有意留白
+
+`packages/coding-agent/README.md:500` 原文：
+
+> *"**No sub-agents.** There's many ways to do this. Spawn pi instances via tmux, or build your own with extensions, or install a package that does it your way."*
+
+`docs/usage.md:303` 同义。官方 subagent **只是扩展示例**（`examples/extensions/subagent/`），不是内建能力。
+
+### "同进程建多个 `AgentSession`" 技术上成立
+
+- `createAgentSession()` 全函数无模块级会话单例，所有状态都是函数局部变量（`src/core/sdk.ts:169-398`）
+- 官方示例已经在**同一个进程里连开多个 session**（`examples/sdk/11-sessions.ts`、`05-tools.ts` 等，但都是**顺序**创建 + dispose，**没有任何并发示例**）
+- 第三方已在生产使用：`pi-subagents`（月下载 42.8 万）文档原文：*"Children are **pi sessions inside the parent process** … **not separate `pi` binaries**"*
+- GitHub issue #6480 原文：*"**In-process subagents (SDK `AgentSession`s) already run fine in the background**"*
+- GitHub issue #7808 给出了和我们 ADR 提议**几乎一样**的做法（`createAgentSession` + `DefaultResourceLoader` + `SessionManager.inMemory()` + `SettingsManager.inMemory()` + 共享 `ModelRuntime`），并称 *"~150 lines of subtle loader configuration"*
+
+### ⚠️ 三个硬坑（直接改实现方式，必须写进设计）
+
+**坑 1：绝对不能给主/子会话共享同一个 `ResourceLoader`。**
+
+`AgentSession` 每个会话新建自己的 `ExtensionRunner`，但**复用同一个 `extensionsResult.runtime`**（`agent-session.ts:2580-2593`）；`runner.ts:323-324` 注释明说 *"Copy actions into the shared runtime (all extension APIs reference this)"*，而这些闭包**捕获的是某个具体 `AgentSession` 的 `this`**。
+
+⇒ 共享 ResourceLoader 会让会话 B 的 `bindCore()` **覆盖会话 A 的扩展 API 路由**（A 的 `pi.setActiveTools()` 打到 B 上）。
+⇒ **正确做法：每个 session 一个 `DefaultResourceLoader`（即不传时的默认行为），但共享一个 `ModelRuntime`**（省 auth/models 重复加载，官方 quick start 亦如此）。
+⇒ 特别注意 `createAgentSessionFromServices()` 会把 `services.resourceLoader` 原样透传——**用同一份 services 调两次就会踩坑**。
+
+**坑 2：闸的状态不能放扩展模块顶层。**
+
+扩展 `.ts` 文件由 `jiti` 加载，**模块顶层变量在进程内只求值一次**，会被所有会话共享。若把权限档位、批准记忆放在扩展模块顶层，多个子代理会串味。
+⇒ **闸的状态必须挂在 per-session 的 `Extension` 实例或闭包上。**
+
+**坑 3：pi 不做任何 UI 序列化，主/子同时弹窗会互相覆盖。**
+
+GitHub issue #7007 原文记录了死锁路径：*"a background subagent's forwarded permission dialog … gets clobbered by the main agent's own permission dialog, and the subagent then blocks on its permission wait **with no answerable prompt on screen until it times out**."*
+
+⇒ **这正面证明：审批弹窗的排队（arbiter）必须自研**，不能指望共用 UI 上下文就完事。
+⇒ 本 ADR 提议的"**审批请求消息化 + 走 `ApprovalService` 排队**"正好治这个——现在有了实证依据。
+
+### "共用同一道闸"没有任何先例可抄
+
+- 官方不提供任何"子会话继承父授权"的机制
+- 下载量最大的第三方 `pi-subagents` **自建了一套独立的子代理权限系统**，其 `watchdog.md` 原文：审批请求发给 *"a one-call arbiter **owned by the child watchdog**"*，且 *"**does not notify the parent**"*；并且 *"Bash is always passed through; bash rules are rejected."*
+- ⇒ **需求 5（主/子共用同一道闸）在 pi 生态里是空白**，我们必须自己做，没有现成实现可抄。
+
+### 顺带：官方示例有一个已确认的 bug
+
+`examples/extensions/subagent/index.ts:373` 监听 `tool_result_end` 事件——**该事件在 pi 里根本不存在**（issue #9436：*"Pi never emits this event … so the branch is unreachable dead code"*）。**照抄这个示例时不要连死代码一起抄。**
+
 ## 决策（提议）
 
 **子代理与主 agent 同为进程内的独立 `AgentSession` 实例**，由同一个工厂函数创建，注入同一个权限闸与同一个 UI 上下文。
 
-具体：
+具体（已按上述调研修正）：
 
 - 子代理 = `createAgentSession({ tools: [...], ... })`，独立消息历史（上下文隔离照样成立）
+- **每个 session 一个独立的 `ResourceLoader`**；**共享一个 `ModelRuntime`**（坑 1）
 - 工具限制**锁在工具配置层**（`tools: ["read","grep","find","ls"]`），不靠提示词
-- 子代理不落会话文件（`SessionManager.inMemory()`），避免污染会话列表
+- **闸的状态挂在 per-session 实例/闭包上，不放扩展模块顶层**（坑 2）
+- **审批走 `ApprovalService` 排队**，由它负责弹窗仲裁（坑 3）
+- 子代理转录**落盘到独立目录**（不进主会话列表，保留归档策略）——见上文 OpenClaw 佐证
 - 子代理的每一次工具调用**走同一个闸实例**，审批弹窗标明 `actor`
 - 主 agent 通过一个自研的 `task` 工具调度子代理，事件流经同一事件总线推给 GUI
+
+## 佐证三：npm 生态盘点（2026-09-14 补）
+
+在 npm 上识别出 **200+ 个** pi 子代理相关包（同名、fork、抢注极多）。**逐项读源码确证进程模型**的：
+
+| 进程模型 | 数量 | 代表 |
+|---|---|---|
+| **进程内** | **约 18 个** | `@gotgenes/pi-subagents`、`@tintinweb/pi-subagents`、`@arhen/pi-core-subagent`、`@bacnh85/pi-subagent`、`@pify/subagent`、`@quintinshaw/pi-dynamic-workflows` |
+| **spawn 子进程** | 约 13 个 | `@henryqw/pi-subagent`、`@marks/pi-subagent`、`pi-vigil`、`@mammothb/pi-subagents`（tmux） |
+| **混合** | 1 个（但**下载量第一**） | `pi-subagents`（nicobailon），86,722 周下载 / 428,818 月下载 |
+
+⇒ **进程内是生态主流**，且下载量最大的包在**前台路径上也是进程内**的。这进一步支持本 ADR 的提议方向。
+
+### ⭐ 最重要的发现：混合路线（建议采纳）
+
+`pi-subagents`（生态第一，428K/月）的源码原文（`src/runs/shared/child-session.ts:1-8`）：
+
+> *"**In-process child sessions.** A child is a pi `AgentSession` created **inside the process that owns it**: the **parent pi process for foreground children**, the **detached runner process for background children**."*
+
+**这正面回答了本 ADR「进程内 = 卡死杀不掉」这个缺点**：
+
+| 任务类型 | 进程模型 | 理由 |
+|---|---|---|
+| 前台、短任务（检索、看代码） | **进程内** | 闸天然共享，启动零成本 |
+| 后台、长任务、不受信任务 | **detached 独立进程** | 跑飞了拖不垮主进程，可以真杀（Windows 用 `taskkill /T /F` 杀整棵进程树） |
+
+⇒ **建议：默认进程内，但对长任务/不受信任务提供独立进程通道。** 这比"纯进程内"稳，也比"纯子进程"简单。
+
+### ⚠️ 一个必须堵的绕过洞
+
+`@nicknisi/pi-subagents` 的 README 自己写出来了：
+
+> *"**The recursion guard has a hole.** The in-process depth guard only covers spawns made through the shared runtime; **a child that itself shells out to `pi -p` via bash starts a fresh process with none of that context**."*
+
+**翻译**：子代理只要用 bash 跑一句 `pi -p "..."`，就起了一个**全新的、没有任何闸的进程**。
+
+⇒ 这条必须写进 [permission-cases.md](../../test/permission-cases.md) 的绕过用例（C 组）：**把"通过 bash 启动新 agent 进程"列为黑名单行为**（`pi`、`node <cli>` 等起 agent 的命令）。
+
+### 一条实现时序要求（闸能盖住子代理的充分必要条件）
+
+`@gotgenes/pi-subagents` 源码把 `session-created` 事件**同步发在 `bindExtensions()` 之前**。原因：子会话的扩展运行在**独立的事件总线**上，只有靠 process-global 注册表（`globalThis` + `Symbol.for`）才能让子会话自己被识别。
+
+⇒ **我们的 SessionFactory 必须照此顺序：先把子会话注册进 `ApprovalService`，再 `bindExtensions()`。** 顺序反了，闸就盖不住子代理。
+
+### 生态普遍缺失的两件事（我们要自己补）
+
+1. **超时**：全生态只有 3 处有（`@gotgenes/pi-permission-system` 的 `forwardingTimeoutMs` + 2 秒 grace；`pi-subagents` 的受控 timeout；`pi-subagent-in-memory` 的 60 秒预算并下传）。**绝大多数包只有 turn 上限，没有时间上限。**
+2. **并发**：成熟默认值是 **4**（gotgenes）/ **10**（tintinweb）/ **5**（henryqw）/ **8 任务 4 并发**（官方示例）。结合 OpenClaw 的三维上限，我们取 **全局 4 / 单父 3 / 深度 1** 起步。
+
+### 关于直接依赖 `@gotgenes/pi-subagents`：不建议
+
+它架构最值得借鉴（分域架构 + typed service + 完整生命周期事件），但三条硬理由：
+
+1. **运行时 `exports` 指向 `.ts` 源码**（`./src/service/service.ts`），靠 pi 的 jiti 加载；Electron 打包链直接 `import` 会失败
+2. **它的闸是另一套**（`@gotgenes/pi-permission-system`），依赖它 = 换掉我们在 ADR-0007 定的硬判定
+3. **它的"同一个闸实例"不是自动成立的**——子会话是独立 jiti 实例 + 独立事件总线，必须靠 `globalThis` 注册表桥接
+
+⇒ **结论：自研调度器 + 深度借鉴它的骨架。**
 
 ## 备选方案
 
 | 方案 | 优点 | 缺点 | 为什么没选 |
 |---|---|---|---|
-| **进程内独立实例**（提议） | 闸天然共享；事件/中止是直接调用；无需打包 pi 运行时；上下文隔离仍然成立 | 无进程隔离：子代理跑飞（死循环、OOM）会拖累整个应用；中止是协作式的（AbortSignal），卡在同步代码里杀不掉 | — |
+| **进程内独立实例 + 后台独立进程**（提议，混合） | 闸天然共享；事件/中止是直接调用；无需打包 pi 运行时；上下文隔离仍然成立；**长任务/不受信任务丢到后台独立进程，可以真杀** | 前台仍是协作式中止；要维护两条通道 | — |
+| 纯进程内独立实例 | 实现最简单 | **跑飞了拖垮主进程且杀不掉**（OpenClaw 同一个弱点，它也没有更优解） | 混合方案成本接近，收益更大 |
 | 官方 spawn 子进程 | 真隔离，崩溃不影响主进程 | **闸不继承**（见上）；需要把 pi 运行时一起打包；每个子代理一个进程 | 直接违反"共用同一道闸" |
-| 子进程 + 强制注入闸扩展 | 隔离 + 闸仍在 | 要维护"父进程闸"和"子进程闸"两套状态同步；`--mode json` 下无 UI，弹窗仍要另建通道；复杂度显著上升 | 复杂度换来的隔离，在当前阶段用不上 |
+| 子进程 + 强制注入闸扩展 | 隔离 + 闸仍在 | 要维护"父进程闸"和"子进程闸"两套状态同步；`--mode json` 下无 UI，弹窗仍要另建通道 | 复杂度换来的隔离，混合方案已覆盖 |
 | 不起子代理，主 agent 自己干 | 最简单 | 违背需求"多智能体第一版就上"；检索大结果会撑爆主 agent 上下文 | 需求明确要求 |
 
 ## 后果
 
 ### 正面
-- 需求"共用同一道闸"和"动作可见可中止"**由构造保证**，不靠协议约定
+- 需求"共用同一道闸"和"动作可见可中止"**由构造 + 子会话注册协议共同保证**。
+
+  ⚠️ **注意：子会话不会自动继承父的扩展钩子**（tintinweb 源码注释：每个 `AgentSession` 用自己的 `ExtensionRunner` 构建）。所以"共用同一道闸"**不是白送的**，必须显式实现"子会话注册"这一步——顺序是**先注册进 `ApprovalService`，再 `bindExtensions()`**（照 `@gotgenes/pi-subagents` 的 `subagents:child:session-created` 协议）。
 - 子代理的启动成本低（无进程创建），可以频繁委派
 
 ### 负面 / 代价
-- **失去进程级隔离**：子代理的 bash 死循环 / 内存爆炸直接影响主进程。必须靠并发上限 + 超时 + 协作式中止来兜
+- **前台子代理失去进程级隔离**：bash 死循环 / 内存爆炸直接影响主进程。缓解：并发上限 + 超时 + 协作式中止 + **把长任务/不受信任务推到后台独立进程**
 - 需要自己实现调度器（并发上限、超时、任务生命周期）
 
 ### 需要后续跟进的事
-- [ ] 并发上限与超时策略（官方示例是 max 8 任务 / 4 并发）
-- [ ] 子代理卡死时的兜底（协作式 abort 杀不掉怎么办）
-- [ ] 如果实测发现进程内不稳定 → 触发本 ADR 的重新审视
+- [ ] 调度器参数：起步值 **全局 4 / 单父 3 / 深度 1**（生态成熟默认：gotgenes 4、tintinweb 10、henryqw 5、官方示例 8 任务 4 并发）
+- [ ] **超时机制**：生态普遍缺失（只有 3 处有），必须自研。参考 `@gotgenes/pi-permission-system` 的 `forwardingTimeoutMs` + 2 秒 grace window
+- [ ] 子代理卡死的兜底：前台只能协作式；**后台独立进程用进程树终止**（Windows `taskkill /T /F`，参考 `pi-subagents` 与 `@mjakl/pi-subagent` 的 SIGKILL + settle 超时）
+- [ ] **堵住 `pi -p` 绕过洞**：子代理用 bash 起新 agent 进程即可绕开一切闸 → 写进 [permission-cases.md](../../test/permission-cases.md) C 组
+- [ ] 递归防护：优先用"子会话不加载编排类扩展"（比工具黑名单更硬），辅以 depth 上限
+- [ ] 如果实测发现前台进程内不稳定 → 触发本 ADR 的重新审视
 - [ ] 架构文档 3.3 节按本条结论重写
 
 ## 什么情况下该重新审视
 
-- 如果实测发现子代理频繁拖垮主进程
+- 如果实测发现子代理频繁拖垮主进程（→ 把更多任务推到后台独立进程）
 - 如果将来要支持"关掉窗口后子代理继续跑"这类跨应用生命周期
 - 如果 pi 官方推出了"子进程继承父扩展与授权"的机制
 
 ## 参考
 
-- `packages/coding-agent/examples/extensions/subagent/index.ts:294, 335-339`
+- `packages/coding-agent/examples/extensions/subagent/index.ts:300`（子进程参数）、`:346`（`spawn`）、`:34`（`MAX_CONCURRENCY = 4`）
+  ⚠️ 该文件已增至 **1039 行**，早期引用的 `:294` / `:335-339` 已漂移
+- `packages/coding-agent/docs/extensions.md:972-976`（模式与 `ctx.hasUI` 对照表）
+  ⚠️ 早期引用的 `:2895-2900` 在新版本已变成 theme colors
 - `packages/coding-agent/docs/security.md:29`（非交互模式无信任提示）
-- `packages/coding-agent/docs/extensions.md:2895-2900`（模式与 `hasUI` 对照表）
-- [research/README.md](../../research/README.md)（调研结论与证据等级）
+- 调研结论：[research/README.md](../../research/README.md)、[research/permission-gate-survey.md](../../research/permission-gate-survey.md)
