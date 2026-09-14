@@ -1,0 +1,44 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 构建产物
+dist/
+out/
+build/
+release/
+*.tsbuildinfo
+.vite/
+
+# Electron 打包产物
+*.asar
+app.asar.unpacked/
+
+# 环境变量与密钥（绝不入库）
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+
+# 日志与临时文件
+*.log
+npm-debug.log*
+.tmp/
+tmp/
+
+# 本机工具残留
+.pi/npm/
+.pi/agent/
+
+# 编辑器
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# 操作系统
+Thumbs.db
+Desktop.ini
+.DS_Store
