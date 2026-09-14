@@ -131,20 +131,35 @@ GitHub issue #7007 原文记录了死锁路径：*"a background subagent's forwa
 
 **不自己实现子代理，复用社区扩展。**
 
-- **工作选择**：`@gotgenes/pi-subagents`（配 `@gotgenes/pi-permission-system`）
-- **理由**：它是调研中**唯一**实现"子会话的 `ask` 转发到父会话 UI"的方案——这正是需求 5（主/子共用同一道闸）的必要条件
-- **进程模型**：它是**纯进程内**的（`createAgentSession`，无 `child_process`），因此不需要我们决定进程模型；本 ADR 下方的调研结论转为**选型依据**保留
+- **工作选择**：`pi-subagents`（nicobailon）—— **生态第一**，月下载 428,818，3582★，几乎每日提交
+- **选择理由**：决策人本人在深度使用这个包，对它的行为有第一手经验；且它是生态里功能最完整、维护最活跃的实现
+- **进程模型**：它是**混合**的——前台子代理跑在父进程内，后台子代理跑在 detached runner 进程内。**因此我们不需要自己决定进程模型**；本 ADR 下方的调研结论转为**选型依据 + 集成注意事项**保留
 
-### 为什么不是生态第一的 `pi-subagents`（nicobailon）
+### ⚠️ 这个选择带来的一个未闭合问题（需求 5）
 
-| | `pi-subagents`（nicobailon） | `@gotgenes/pi-subagents` |
+`pi-subagents` 的权限能力与我们的需求 5 有已知偏差：
+
+| 项 | 现状 |
+|---|---|
+| 子代理的 `ask` 是否转发到父会话 UI | **前台进程内子会话：不转发**；后台独立进程：**会设 `PI_SUBAGENT_PARENT_SESSION`**（`src/extension/index.ts:975`），从而可与 `@gotgenes/pi-permission-system` 的 out-of-process 转发通道对接 |
+| 它自己的 `ask` 判定 | 交给 **child watchdog 的一次性 arbiter 模型**，文档原文 *"does not notify the parent"* |
+| **bash 策略** | **明确不管** —— `src/runs/shared/permissions.ts:20`：*"pi-subagents leaves bash policy to pi-guard"*，即 bash 一律放行 |
+
+⇒ **需求 5（主/子共用同一道闸）不能靠这个包独立满足，必须靠 `@gotgenes/pi-permission-system` 的转发通道补上，且要实测前台 in-process 子会话那条路径是否真的接通。**
+
+> 注：`@gotgenes/pi-permission-system` 的选型一致性表把 `pi-subagents` 标为 "subprocess" 且 "✗ Sets no parent-session variable"，**与源码不符**（源码里确实设了）。不要照抄那张表。
+
+### 为什么当初考虑过但没选的 `@gotgenes/pi-subagents`
+
+| | `pi-subagents`（**已选**） | `@gotgenes/pi-subagents` |
 |---|---|---|
 | 月下载 | **428,818**（生态第一） | 12,977 |
 | 进程模型 | 前台进程内 / 后台独立进程（混合） | 纯进程内 |
-| **`ask` 转发到父 UI** | ❌ **不转发**（交给 child watchdog 自己的一次性 arbiter，文档原文 *"does not notify the parent"*） | ✅ **转发** |
-| **bash 策略** | ❌ 明确不管（*"leaves bash policy to pi-guard"*），bash 一律放行 | 走 `@gotgenes/pi-permission-system` |
-
-⇒ **需求 5 是硬要求**，所以选功能对口的那个，而不是下载量最大的那个。
+| 功能完整度 | 高（并发/超时/进程树终止/可观测/结构化委派 API） | 中 |
+| 维护活跃度 | 几乎每日提交 | 近每日 |
+| `ask` 转发到父 UI | 需配合权限包的通道（**待实测**） | ✅ 原生支持 |
+| bash 策略 | 明确不管 | 走权限包 |
+| 决策 | ✅ **采用**（决策人有第一手使用经验） | 备选 |
 
 ### 复用之后，仍然由我们负责的部分
 
