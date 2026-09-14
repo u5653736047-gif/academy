@@ -1,9 +1,13 @@
 # ADR-0006：子代理的进程模型
 
-- 状态：**提议中（待拍板）** ⚠️
+- 状态：**已接受** ✅
 - 日期：2026-09-14
-- 决策人：待定
+- 决策人：项目组
 - 相关：[ADR-0002](./0002-embed-pi-as-sdk.md)、[ADR-0007](./0007-permission-gate-hook-point.md)、[architecture.md](../architecture.md) 第 3.3 节
+
+> **决策摘要**：**不自己实现子代理**，复用社区成熟扩展——工作选择 `@gotgenes/pi-subagents`（配 `@gotgenes/pi-permission-system`），因为它是唯一实现"子会话的 `ask` 转发到父会话 UI"的方案。
+> **理由**：与 ADR-0007 一致——避免重复造轮子，复用社区实现以减少工作量。
+> **因此本 ADR 的角色从"选一个方案自己做"变成"选一个包并接好它"**：下面的调研结论仍然全部有效，但用途从"实现指南"转为"选型依据 + 集成注意事项"。
 
 > ⚠️ **这条不拍板，架构文档 3.3 节和权限闸的"主/子共用同一道闸"就写不实。**
 > 注意：架构文档 v0.1 第 3.3 节和决策 D2 目前写的是"subagent 是独立 pi 进程"，**那是在没有验证 pi 官方 subagent 扩展的前提下写的。本 ADR 是对它的挑战。**
@@ -123,20 +127,43 @@ GitHub issue #7007 原文记录了死锁路径：*"a background subagent's forwa
 
 `examples/extensions/subagent/index.ts:373` 监听 `tool_result_end` 事件——**该事件在 pi 里根本不存在**（issue #9436：*"Pi never emits this event … so the branch is unreachable dead code"*）。**照抄这个示例时不要连死代码一起抄。**
 
-## 决策（提议）
+## 决策（已接受）
 
-**子代理与主 agent 同为进程内的独立 `AgentSession` 实例**，由同一个工厂函数创建，注入同一个权限闸与同一个 UI 上下文。
+**不自己实现子代理，复用社区扩展。**
 
-具体（已按上述调研修正）：
+- **工作选择**：`@gotgenes/pi-subagents`（配 `@gotgenes/pi-permission-system`）
+- **理由**：它是调研中**唯一**实现"子会话的 `ask` 转发到父会话 UI"的方案——这正是需求 5（主/子共用同一道闸）的必要条件
+- **进程模型**：它是**纯进程内**的（`createAgentSession`，无 `child_process`），因此不需要我们决定进程模型；本 ADR 下方的调研结论转为**选型依据**保留
 
-- 子代理 = `createAgentSession({ tools: [...], ... })`，独立消息历史（上下文隔离照样成立）
-- **每个 session 一个独立的 `ResourceLoader`**；**共享一个 `ModelRuntime`**（坑 1）
-- 工具限制**锁在工具配置层**（`tools: ["read","grep","find","ls"]`），不靠提示词
-- **闸的状态挂在 per-session 实例/闭包上，不放扩展模块顶层**（坑 2）
-- **审批走 `ApprovalService` 排队**，由它负责弹窗仲裁（坑 3）
-- 子代理转录**落盘到独立目录**（不进主会话列表，保留归档策略）——见上文 OpenClaw 佐证
-- 子代理的每一次工具调用**走同一个闸实例**，审批弹窗标明 `actor`
-- 主 agent 通过一个自研的 `task` 工具调度子代理，事件流经同一事件总线推给 GUI
+### 为什么不是生态第一的 `pi-subagents`（nicobailon）
+
+| | `pi-subagents`（nicobailon） | `@gotgenes/pi-subagents` |
+|---|---|---|
+| 月下载 | **428,818**（生态第一） | 12,977 |
+| 进程模型 | 前台进程内 / 后台独立进程（混合） | 纯进程内 |
+| **`ask` 转发到父 UI** | ❌ **不转发**（交给 child watchdog 自己的一次性 arbiter，文档原文 *"does not notify the parent"*） | ✅ **转发** |
+| **bash 策略** | ❌ 明确不管（*"leaves bash policy to pi-guard"*），bash 一律放行 | 走 `@gotgenes/pi-permission-system` |
+
+⇒ **需求 5 是硬要求**，所以选功能对口的那个，而不是下载量最大的那个。
+
+### 复用之后，仍然由我们负责的部分
+
+| 项 | 说明 |
+|---|---|
+| **子代理定义文件** | markdown + YAML frontmatter（`.pi/agents/<name>.md`）——**内容由我们写**（检索子代理、通用基座） |
+| **`task` 工具的接入** | 让主 agent 知道"什么时候该派子代理"：系统提示词 + agent 描述 |
+| **调度参数** | 并发上限、超时、嵌套深度——按我们的场景定值（包只给默认值） |
+| **GUI 过程树** | 包有生命周期事件，但**没有任何现成的"子代理过程树"UI**（OpenClaw 也没有）——这是我们的活，也可能是产品差异点 |
+| **审批弹窗的归属标注** | "是哪个子代理发来的请求"——包与 OpenClaw 都未覆盖 |
+| **`pi -p` 绕过洞** | 必须自己补规则（见下文） |
+
+### 集成时注意（来自调研的硬约束）
+
+1. **`ask` 转发是文件轮询，不是函数调用**：轮询间隔 250ms、超时 10 分钟，请求/响应是 JSON 文件。Electron 宿主下要评估这套 IO 的开销
+2. **闸绑定的是 TUI 对话框**：我们要自己实现"serving node"（即 `ExtensionUIContext`）
+3. **子会话不会自动继承父的扩展钩子**——包靠 `subagents:child:session-created` 事件同步注册解决，**我们接入时必须保证这个时序**
+4. **运行时 `exports` 指向 `.ts` 源码**（靠 pi 的 jiti 加载）：Electron 打包链要验证能否正常加载；**这条要在技术验证阶段第一个验**
+5. **版本锁定**：`@gotgenes/*` 迭代极快（4 个月 210 + 176 个版本，有破坏性变更），必须锁精确版本
 
 ## 佐证三：npm 生态盘点（2026-09-14 补）
 

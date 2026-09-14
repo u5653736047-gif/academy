@@ -35,12 +35,14 @@ ADR 的价值在于：半年后你回头看，能知道当时为什么不用另�
 | 编号 | 标题 | 状态 | 备注 |
 |---|---|---|---|
 | [0001](./0001-electron-desktop.md) | 本地端采用 Electron 桌面应用 | 已接受 | 取代原"npm 分发"方案 |
-| [0002](./0002-embed-pi-as-sdk.md) | 以 SDK 方式内嵌 pi | 已接受 | 其中"subagent 走独立进程"一句**已被 0006 挑战** |
+| [0002](./0002-embed-pi-as-sdk.md) | 以 SDK 方式内嵌 pi | 已接受 | "subagent 走独立进程"一句已由 0006 修正 |
 | [0003](./0003-server-on-rented-vm.md) | 服务端部署在自租云主机 | 已接受 | |
 | [0004](./0004-rag-hybrid-retrieval.md) | RAG 采用混合检索 | 已接受 | 向量 + FTS5 |
 | [0005](./0005-retrieval-tool-extension.md) | 检索通道用自研扩展工具 + HTTP | 已接受 | 非 MCP |
-| [0006](./0006-subagent-process-model.md) | 子代理的进程模型 | **提议中** | 进程内实例 vs 独立 pi 进程 |
-| [0007](./0007-permission-gate-hook-point.md) | 权限闸的挂点与审批链路 | **提议中** | SDK 钩子 + 消息化审批 |
+| [0006](./0006-subagent-process-model.md) | 子代理的进程模型 | **已接受** | 复用 `@gotgenes/pi-subagents`——唯一做 ask 转发的 |
+| [0007](./0007-permission-gate-hook-point.md) | 权限闸的挂点与审批链路 | **已接受** | 扩展层 + 复用 `@gotgenes/pi-permission-system` |
+
+**7 条决策全部落定，设计阶段可进入基线冻结。** 待议的只剩 [02-scope-v1.md](../../02-scope-v1.md) 第三节的 V1 范围（不影响设计文档主体）。
 
 ## 与架构文档的关系
 
