@@ -6,24 +6,21 @@
 
 底座是 [pi](https://pi.dev)。
 
-> **当前阶段：设计阶段，尚无代码。**
-> 下一步：拍板 [ADR-0006](./docs/design/adr/0006-subagent-process-model.md) 与 [ADR-0007](./docs/design/adr/0007-permission-gate-hook-point.md)，然后冻结设计基线。
+## 当前状态
 
-## 从哪开始读
+**2026-09-15 转向**：阶段一不再从零自己写，改为**基于现成的 pi 桌面端 `PI-Desktop` 改造**（GUI 优化为主）。
 
-**→ [docs/README.md](./docs/README.md) —— 文档索引**
-
-那份索引里有完整的文档清单、阅读顺序和每份文档的状态。
-
-## 文档地图
-
-| 目录 | 放什么 |
+| | 计划 |
 |---|---|
-| [`docs/`](./docs/) | 需求、范围基线、术语表 |
-| [`docs/research/`](./docs/research/) | 调研报告（pi 权限方案，五个渠道） |
-| [`docs/design/`](./docs/design/) | 架构、ADR、详细设计、接口契约、数据模型 |
-| [`docs/test/`](./docs/test/) | 测试计划、权限规则用例表、需求追溯矩阵 |
-| [`docs/ops/`](./docs/ops/) | 构建打包、服务端部署 |
+| **阶段一** | 以 [`vastsa/PI-Desktop`](https://github.com/vastsa/PI-Desktop) 为基座，改造界面与教学场景适配 |
+| **阶段二** | 按原计划补全教学特色：课程资料检索、检索子代理、服务端知识库 |
+
+- 需求文档：[`docs/01-requirements.md`](./docs/01-requirements.md)
+- 基座代码：`pi-desktop/`（本地克隆，**未纳入本仓库**，见 `.gitignore`）
+- ⚠️ 基座许可为 **LGPL-3.0**，分发前需确认合规
+
+> **设计文档已于 2026-09-15 全部清空**（转向前的架构/ADR/详细设计均作废）。
+> 需要旧版内容可从 git 历史取回：`git show 1dbd51b:docs/README.md`。
 
 ## 三条要守住的原则
 

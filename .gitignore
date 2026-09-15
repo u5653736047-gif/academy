@@ -32,6 +32,10 @@ tmp/
 .pi/npm/
 .pi/agent/
 
+# 外部参考代码（PI-Desktop 基座，独立 git 仓库，不并入本仓库）
+# 待定：将来确定是 fork / submodule / vendor 之后，再决定要不要改这一条
+pi-desktop/
+
 # 编辑器
 .vscode/*
 !.vscode/extensions.json
