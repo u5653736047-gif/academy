@@ -1,8 +1,11 @@
 # 接口契约：端 ↔ 云（服务端 API）
 
 > 版本：v0.1（骨架）｜ 状态：骨架 ｜ 日期：2026-09-14
+> **适用阶段：【阶段二】** ⚠️ 阶段一不联任何服务端，本文件在阶段一**不据此开工**
 > 上游：[architecture.md](./architecture.md) 第 2 节、[adr/0004](./adr/0004-rag-hybrid-retrieval.md)、[adr/0005](./adr/0005-retrieval-tool-extension.md)
 > 下游：服务端实现、[data-model.md](./data-model.md)
+>
+> 📌 阶段划分见 [../02-scope-v1.md](../02-scope-v1.md)。阶段一先做内核改造与桌面壳，本文件保持骨架状态即可。
 
 ## 1. 三条通道
 
@@ -61,7 +64,6 @@ POST /api/activate
 请求：邀请码 + 姓名学号 → 响应：课程 token。
 
 - 只用于老师认人，**不做账号密码体系**
-- 【待决】只服务自己时这条通道是否砍掉
 
 ## 4. 通道 ③ 记录上报
 

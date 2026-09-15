@@ -3,6 +3,7 @@
 - 状态：**已接受**
 - 日期：2026-09-14
 - 决策人：项目组
+- **适用阶段：阶段一**
 - 相关：[architecture.md](../architecture.md)、[ADR-0002](./0002-embed-pi-as-sdk.md)
 
 ## 背景

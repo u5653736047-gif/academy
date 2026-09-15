@@ -6,14 +6,14 @@
   </defs>
   <rect x="0" y="0" width="1400" height="1120" fill="#ffffff"/>
 
-  <text x="40" y="44" font-size="20" font-weight="bold" fill="#202124">课程 Agent 助教 · 本地 Agent 详细设计 v0.1</text>
-  <text x="40" y="66" font-size="12" fill="#5f6368">只含学生本地部分 · 2026-09-14 · 服务端与端云通道见《端云交互总览》</text>
+  <text x="40" y="44" font-size="20" font-weight="bold" fill="#202124">课程 Agent 助教 · 本地 Agent 详细设计 v0.2（阶段一）</text>
+  <text x="40" y="66" font-size="12" fill="#5f6368">只含学生本地部分 · 2026-09-15 · 标【阶段二】的部分本阶段不做 · 服务端见《端云交互总览》</text>
   <rect x="40" y="80" width="18" height="12" fill="#e6f4ea" stroke="#188038"/>
   <text x="64" y="90" font-size="12" fill="#202124">pi 现成</text>
   <rect x="150" y="80" width="18" height="12" fill="#e8f0fe" stroke="#1a73e8"/>
   <text x="174" y="90" font-size="12" fill="#202124">我们开发</text>
   <rect x="260" y="80" width="18" height="12" fill="#fef7e0" stroke="#f9ab00"/>
-  <text x="284" y="90" font-size="12" fill="#202124">配置 / 待拍板</text>
+  <text x="284" y="90" font-size="12" fill="#202124">复用社区扩展</text>
   <rect x="420" y="80" width="18" height="12" fill="#f1f3f4" stroke="#9aa0a6"/>
   <text x="444" y="90" font-size="12" fill="#202124">数据</text>
   <rect x="510" y="80" width="18" height="12" fill="#ffffff" stroke="#5f6368" stroke-dasharray="4 3"/>
@@ -27,8 +27,8 @@
   <text x="74" y="162" font-size="13" font-weight="bold" fill="#174ea6">对话视图</text>
   <text x="74" y="184" font-size="11.5" fill="#202124">消息流 · 流式渲染</text>
   <text x="74" y="202" font-size="11.5" fill="#202124">subagent 过程树（实时可见）</text>
-  <text x="74" y="220" font-size="11.5" fill="#202124">出处卡片（资料名 + 页码）</text>
-  <text x="74" y="238" font-size="11.5" fill="#202124">一键反馈（回答不对劲时）</text>
+  <text x="74" y="220" font-size="11.5" fill="#202124">出处卡片（资料名 + 页码）【阶段二】</text>
+  <text x="74" y="238" font-size="11.5" fill="#202124">一键反馈（回答不对劲时）【阶段二】</text>
 
   <rect x="365" y="140" width="290" height="144" rx="8" fill="#ffffff" stroke="#1a73e8"/>
   <text x="379" y="162" font-size="13" font-weight="bold" fill="#174ea6">会话中心</text>
@@ -46,10 +46,10 @@
 
   <rect x="975" y="140" width="355" height="144" rx="8" fill="#ffffff" stroke="#1a73e8"/>
   <text x="989" y="162" font-size="13" font-weight="bold" fill="#174ea6">激活与设置</text>
-  <text x="989" y="184" font-size="11.5" fill="#202124">激活向导：课程邀请码 + 姓名学号</text>
-  <text x="989" y="202" font-size="11.5" fill="#202124">告知同意（首次 · 文案从简）</text>
-  <text x="989" y="220" font-size="11.5" fill="#202124">API key 配置（学生自选供应商）</text>
-  <text x="989" y="238" font-size="11.5" fill="#202124">课程工作区目录展示</text>
+  <text x="989" y="184" font-size="11.5" fill="#202124">激活向导：课程邀请码 + 姓名学号【阶段二】</text>
+  <text x="989" y="202" font-size="11.5" fill="#202124">告知同意（首次 · 文案从简）【阶段二】</text>
+  <text x="989" y="220" font-size="11.5" fill="#202124">API key 配置（学生自选供应商）【阶段一】</text>
+  <text x="989" y="238" font-size="11.5" fill="#202124">课程工作区目录展示【阶段一】</text>
 
   <!-- GUI <-> 服务层 -->
   <line x1="350" y1="304" x2="350" y2="336" stroke="#5f6368" stroke-width="1.5" marker-end="url(#arr)"/>
@@ -77,16 +77,16 @@
 
   <!-- B2 subagent -->
   <rect x="720" y="384" width="620" height="190" rx="10" fill="#ffffff" stroke="#f9ab00" stroke-width="1.5"/>
-  <text x="736" y="408" font-size="14" font-weight="bold" fill="#b06000">subagent（独立 pi 进程 · pi 官方扩展机制）</text>
+  <text x="736" y="408" font-size="14" font-weight="bold" fill="#b06000">子代理（复用 pi-subagents · 混合进程模型）</text>
 
   <rect x="740" y="418" width="280" height="100" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
-  <text x="754" y="440" font-size="13" font-weight="bold" fill="#b06000">通用 subagent（基座）</text>
+  <text x="754" y="440" font-size="13" font-weight="bold" fill="#b06000">通用子代理（基座）【阶段一】</text>
   <text x="754" y="462" font-size="11.5" fill="#202124">能力完整 · 承接拆分的复杂任务</text>
   <text x="754" y="480" font-size="11.5" fill="#202124">干完只回传摘要</text>
-  <text x="754" y="498" font-size="11.5" fill="#202124">定义 = markdown 文件</text>
+  <text x="754" y="498" font-size="11.5" fill="#202124">前台=父进程内会话 / 后台=独立进程</text>
 
   <rect x="1040" y="418" width="280" height="100" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
-  <text x="1054" y="440" font-size="13" font-weight="bold" fill="#b06000">资料检索 subagent</text>
+  <text x="1054" y="440" font-size="13" font-weight="bold" fill="#b06000">资料检索子代理【阶段二】</text>
   <text x="1054" y="462" font-size="11.5" fill="#202124">基座 + 工具白名单（只留检索）</text>
   <text x="1054" y="480" font-size="11.5" fill="#202124">只读 · 上下文防火墙</text>
   <text x="1054" y="498" font-size="11.5" fill="#202124">防撑爆主 agent 上下文</text>
@@ -104,7 +104,7 @@
 
   <!-- B3 权限闸 -->
   <rect x="60" y="596" width="1280" height="130" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
-  <text x="76" y="620" font-size="14" font-weight="bold" fill="#174ea6">权限闸（自研扩展 · 挂在 beforeToolCall 钩子 · 主 / subagent 共用同一道闸）</text>
+  <text x="76" y="620" font-size="14" font-weight="bold" fill="#174ea6">权限闸【阶段一】（扩展层 tool_call · 复用社区权限扩展 + 自研审批排队 · 主 / 子代理共用同一道闸）</text>
 
   <rect x="76" y="632" width="170" height="64" rx="6" fill="#ffffff" stroke="#1a73e8"/>
   <text x="86" y="654" font-size="12" font-weight="bold" fill="#174ea6">拦截点</text>
@@ -144,22 +144,22 @@
   <!-- B4 工具集 -->
   <text x="76" y="766" font-size="13" font-weight="bold" fill="#202124">工具集</text>
   <rect x="76" y="776" width="360" height="56" rx="8" fill="#e6f4ea" stroke="#188038" stroke-width="1.5"/>
-  <text x="90" y="796" font-size="12.5" font-weight="bold" fill="#0d652d">read / edit / bash（pi 自带）</text>
+  <text x="90" y="796" font-size="12.5" font-weight="bold" fill="#0d652d">read / edit / bash（pi 自带）【阶段一】</text>
   <text x="90" y="816" font-size="11.5" fill="#202124">看代码 · 复现报错 · 改文件</text>
 
   <rect x="452" y="776" width="360" height="56" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
-  <text x="466" y="794" font-size="12.5" font-weight="bold" fill="#174ea6">课程资料检索（自研）</text>
+  <text x="466" y="794" font-size="12.5" font-weight="bold" fill="#174ea6">课程资料检索（自研）【阶段二】</text>
   <text x="466" y="810" font-size="11.5" fill="#202124">→ 服务端 · 超时降级为提示</text>
   <text x="466" y="826" font-size="11" fill="#202124">通道形态：自研扩展工具（pi.registerTool）→ HTTP</text>
 
   <rect x="828" y="776" width="480" height="56" rx="8" fill="#ffffff" stroke="#1a73e8"/>
-  <text x="842" y="794" font-size="12.5" font-weight="bold" fill="#174ea6">subagent 工具白名单（配置点）</text>
-  <text x="842" y="810" font-size="11.5" fill="#202124">检索 subagent：只留检索工具 · 只读</text>
+  <text x="842" y="794" font-size="12.5" font-weight="bold" fill="#174ea6">子代理工具白名单（配置点）【阶段一】</text>
+  <text x="842" y="810" font-size="11.5" fill="#202124">检索子代理：只留检索工具 · 只读【阶段二】</text>
   <text x="842" y="826" font-size="11" fill="#b06000">锁死在工具配置层，不靠提示词</text>
 
   <!-- B5 服务端客户端 -->
   <rect x="60" y="852" width="1280" height="40" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
-  <text x="76" y="877" font-size="13" font-weight="bold" fill="#174ea6">服务端客户端（自研）</text>
+  <text x="76" y="877" font-size="13" font-weight="bold" fill="#174ea6">服务端客户端（自研）【阶段二】</text>
   <text x="250" y="877" font-size="12" fill="#202124">激活 · 检索调用 · 记录上报（本地队列 · 攒批 · 可关 · 学生可查看）</text>
 
   <!-- ===================== C. 本地数据 ===================== -->

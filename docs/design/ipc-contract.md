@@ -1,8 +1,12 @@
 # 接口契约：渲染进程 ↔ 主进程（IPC）
 
-> 版本：v0.1（骨架）｜ 状态：骨架 ｜ 日期：2026-09-14
+> 版本：v0.2（骨架）｜ 状态：骨架 ｜ 日期：2026-09-15
+> **适用阶段：两阶段**——**阶段一先落"事件下行 / 指令上行 / 审批协议"三条链路的骨架**；检索与反馈相关事件属阶段二
 > 上游：[architecture.md](./architecture.md) 第 3 节、[permission-gate.md](./permission-gate.md)、[gui.md](./gui.md)
 > 下游：实现代码、[../test/test-plan.md](../test/test-plan.md)
+>
+> 📌 **阶段一是这份契约的主要落地期**：阶段一要交付桌面应用，主/渲染两进程的边界就是它的骨架。
+> 阶段划分见 [../02-scope-v1.md](../02-scope-v1.md)。
 
 ## 1. 这份文档要锁死什么
 
@@ -20,18 +24,18 @@
 
 ## 3. 事件下行【待填字段】
 
-| 事件 | 何时发 | 关键字段 | 来源 |
-|---|---|---|---|
-| `session.state` | 会话状态变化 | sessionId, status(空闲/运行中/待确认) | 事件总线 |
-| `message.delta` | 流式输出增量 | sessionId, messageId, delta | `message_update` |
-| `message.complete` | 消息完成 | sessionId, messageId, content | `message_end` |
-| `tool.start` | 工具开始执行 | sessionId, actor, toolName, args | `tool_execution_start` |
-| `tool.end` | 工具执行结束 | sessionId, actor, toolName, result, isError | `tool_execution_end` |
-| `subagent.start` | 子代理启动 | parentSessionId, subagentId, actor, task | 自研调度器 |
-| `subagent.update` | 子代理进度 | subagentId, 当前动作 | 自研调度器 |
-| `subagent.end` | 子代理结束 | subagentId, 摘要, usage, stopReason | 自研调度器 |
-| `citation` | 检索返回出处 | messageId, 文件名, 页码, 片段 | 检索工具 |
-| 【待补】 | | | |
+| 事件 | 何时发 | 关键字段 | 来源 | 阶段 |
+|---|---|---|---|---|
+| `session.state` | 会话状态变化 | sessionId, status(空闲/运行中/待确认) | 事件总线 | 一 |
+| `message.delta` | 流式输出增量 | sessionId, messageId, delta | `message_update` | 一 |
+| `message.complete` | 消息完成 | sessionId, messageId, content | `message_end` | 一 |
+| `tool.start` | 工具开始执行 | sessionId, actor, toolName, args | `tool_execution_start` | 一 |
+| `tool.end` | 工具执行结束 | sessionId, actor, toolName, result, isError | `tool_execution_end` | 一 |
+| `subagent.start` | 子代理启动 | parentSessionId, subagentId, actor, task | 子代理包的生命周期事件 | 一 |
+| `subagent.update` | 子代理进度 | subagentId, 当前动作 | 同上 | 一 |
+| `subagent.end` | 子代理结束 | subagentId, 摘要, usage, stopReason | 同上 | 一 |
+| `citation` | 检索返回出处 | messageId, 文件名, 页码, 片段 | 检索工具 | **二** |
+| 【待补】 | | | | |
 
 **字段级定义**：见下表模板
 
@@ -45,15 +49,15 @@
 
 ## 4. 指令上行【待填字段】
 
-| 指令 | 参数 | 返回 | 说明 |
-|---|---|---|---|
-| `prompt` | sessionId, text | ack | 发一条用户消息 |
-| `steer` | sessionId, text | ack | 运行中插入指令 |
-| `abort` | sessionId, target?(main / subagentId) | ack | 中止 |
-| `tier.set` | sessionId, tier | ack | 切换权限档位 |
-| `session.new` / `session.switch` | | ack | 会话操作 |
-| `feedback` | messageId, 内容 | ack | 一键反馈 |
-| 【待补】 | | | |
+| 指令 | 参数 | 返回 | 说明 | 阶段 |
+|---|---|---|---|---|
+| `prompt` | sessionId, text | ack | 发一条用户消息 | 一 |
+| `steer` | sessionId, text | ack | 运行中插入指令 | 一 |
+| `abort` | sessionId, target?(main / subagentId) | ack | 中止 | 一 |
+| `tier.set` | sessionId, tier | ack | 切换权限档位 | 一 |
+| `session.new` / `session.switch` | | ack | 会话操作 | 一 |
+| `feedback` | messageId, 内容 | ack | 一键反馈 | **二** |
+| 【待补】 | | | | |
 
 ## 5. 审批请求 / 回执协议【已定草案】
 

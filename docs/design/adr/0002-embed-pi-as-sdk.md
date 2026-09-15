@@ -3,6 +3,7 @@
 - 状态：**已接受**（其中"子代理走官方扩展机制（独立进程）"一句**已被 [ADR-0006](./0006-subagent-process-model.md) 挑战**）
 - 日期：2026-09-14
 - 决策人：项目组
+- **适用阶段：阶段一**
 - 相关：[ADR-0001](./0001-electron-desktop.md)、[ADR-0006](./0006-subagent-process-model.md)、[ADR-0007](./0007-permission-gate-hook-point.md)
 
 ## 背景

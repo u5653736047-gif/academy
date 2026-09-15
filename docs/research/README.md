@@ -87,10 +87,11 @@ README 原文核实到的设计：
 
 | 路线 | 做法 | 代价 |
 |---|---|---|
-| **复用** | 以 `@gotgenes/pi-permission-system` 为主线（挂在扩展层 `tool_call`、sessionId 为 key），我们只补三档 UI 与 Electron 集成 | 接受 210 个版本的迭代速度；tree-sitter 的 Electron 打包问题；与 `pi-tui` 的 peer 依赖；**ADR-0007 里"硬判定挂 SDK 钩子"的方案要放弃** |
-| **自研** | 照 `pi-verdict` 的结构自己写（零依赖、约 1k 行、确定性 floor 先于 AI、自保护层），保留 SDK 钩子的抗篡改设计 | 命令解析要自己上 tree-sitter；需求 ⑤ 的 session-keyed 转发机制要自己实现 |
+| **复用** ✅ **已选** | 以 `@gotgenes/pi-permission-system` 为主线（挂在扩展层 `tool_call`、sessionId 为 key），我们只补三档 UI 与 Electron 集成 | 接受 210 个版本的迭代速度；tree-sitter 的 Electron 打包问题；与 `pi-tui` 的 peer 依赖；**ADR-0007 里"硬判定挂 SDK 钩子"的方案要放弃** |
+| **自研** ❌ 未选 | 照 `pi-verdict` 的结构自己写（零依赖、约 1k 行、确定性 floor 先于 AI、自保护层），保留 SDK 钩子的抗篡改设计 | 命令解析要自己上 tree-sitter；需求 ⑤ 的 session-keyed 转发机制要自己实现 |
 
-**这是一条新的待拍板事项，与 [ADR-0006](../../design/adr/0006-subagent-process-model.md) / [ADR-0007](../../design/adr/0007-permission-gate-hook-point.md) 强耦合。**
+**这条已经拍板**：选了**复用**，落为 [ADR-0007](../../design/adr/0007-permission-gate-hook-point.md)（已接受）。
+上面这张"自研"行作为**决策过程的记录**保留——如果将来复用的代价超出预期，重新审视的入口就在这里。
 
 ## 渠道与状态
 
